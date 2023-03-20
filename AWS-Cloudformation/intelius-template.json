@@ -1,0 +1,147 @@
+{
+  "AWSTemplateFormatVersion" : "2010-09-09",
+
+  "Description" : "Integrated open source tools for automating data ingestion and processing of stock market data by Intelius",
+
+  "Parameters" : {
+    "InstanceName" : {
+      "Description" : "Instance Name of the BoosterPack Application Server",
+      "Type" : "String",
+      "MinLength": "1",
+      "MaxLength": "32",
+      "ConstraintDescription" : "Please provide a unique name within 1 to 32 characters long"
+    },
+    "ApplicationImage" : {
+      "Description" : "Recommended AMI for the BoosterPack Application Server",
+      "Type" : "String",
+      "Default" : "ubuntu-20.04",
+      "AllowedValues" : [ "ubuntu-20.04"],
+      "ConstraintDescription" : "Preset configuration cannot be changed"
+    },
+    "InstanceType" : {
+      "Description" : "Recommended EC2 Instance Type for the BoosterPack Application Server",
+      "Type" : "String",
+      "Default" : "t3.xlarge",
+      "AllowedValues" : [ "t3.xlarge"],
+      "ConstraintDescription" : "Preset configuration cannot be changed"
+    },
+    "KeyPair": {
+      "Description" : "Select an existing KeyPair for SSH access to the BoosterPack Application Server",
+      "Type": "AWS::EC2::KeyPair::KeyName",
+      "ConstraintDescription" : "Must use an existing key pair"
+    },
+    "SecurityGroup": {
+        "Description" : "Select a Security Group in the default VPC",
+        "Type" : "AWS::EC2::SecurityGroup::GroupName",
+        "ConstraintDescription" : " Must use an existing Security Group in the default VPC"
+    },
+    "APIKeyPOLYGON": {
+        "Description" : "Polygon API Key",
+        "Type" : "String",
+        "NoEcho" : "true",
+        "MinLength" : "1",
+        "ConstraintDescription" : "Provide an API Key obtained from Polygon.io"
+    }, 
+    "APIKeyFINNHUB": {
+        "Description" : "Finnhub API Key",
+        "Type" : "String",
+        "NoEcho" : "true",
+        "MinLength" : "1",
+        "ConstraintDescription" : "Provide an API Key obtained from Finnhub.io"
+    }
+  },
+
+  "Mappings": {
+    "OSType2AMI": {
+        "ubuntu-20.04": {
+            "AMIId": "ami-0859074604ca21d57"
+        }
+    }
+  },       
+  "Resources" : {
+    "AppServer": {
+      "Type": "AWS::EC2::Instance",
+      "Properties": {
+        "Tags" : [
+            {"Key" : "Name", "Value" : { "Ref" : "InstanceName" }},
+            {"Key" : "BoosterPack", "Value" : "Intelius"}
+        ],    
+        "ImageId" : { 
+          "Fn::FindInMap" : [ 
+            "OSType2AMI", 
+            { 
+              "Ref" : "ApplicationImage" 
+            }, 
+            "AMIId"
+          ]
+        },
+        "InstanceType"   : { "Ref" : "InstanceType" },
+        "KeyName"        : { "Ref" : "KeyPair" },
+        "SecurityGroups" : [{"Ref" : "SecurityGroup"}],
+        "BlockDeviceMappings": [
+          {
+            "DeviceName": "/dev/sda1",
+            "Ebs": {
+              "VolumeType": "gp2",
+              "VolumeSize": "80"
+            }
+          }
+        ],
+        "UserData":{
+          "Fn::Base64":{
+            "Fn::Join":[
+              "\n",
+              [ 
+
+                "#!/bin/bash",
+
+                "{",
+
+                "echo \"=======> DAIR BOOSTERPACK INSTALLATION IS STARTING <=======\"",
+                "echo $(date)",
+                
+                "RELEASENAME=\"main\"",
+
+                {"Fn::Sub" : "POLYGON_API_KEY=${APIKeyPOLYGON}"},
+                {"Fn::Sub" : "FINNHUB_API_KEY=${APIKeyFINNHUB}"},
+
+                "echo \"export POLYGON_API_KEY=$POLYGON_API_KEY\" >> \"/etc/profile.d/boosterpack.sh\"",
+                "echo \"export FINNHUB_API_KEY=$FINNHUB_API_KEY\" >> \"/etc/profile.d/boosterpack.sh\"",
+              
+                "echo \"Installing Intelius Automated Data Pipelines (ADP) Booster Pack into VM\"",
+                "echo \"Install logs available at /var/log/\"",
+                
+                "echo \"Step 1: Microk8s and infrastructure components based on BigBitBus KAT Booster Pack\"",
+                "curl -L -s \"https://raw.githubusercontent.com/BigBitBusInc/kubernetes-automation-toolkit/$RELEASENAME/code/local-kubernetes-cluster-installation/install-microk8s-on-ubuntu.sh\" | bash | tee \"/var/log/bigbitbus-microk8s-install.log\" &",
+                "wait",
+
+                "echo \"Step 2: Installation of Intelius integrated tools and ADP app!\"",
+                "curl -L -s \"https://raw.githubusercontent.com/Intelius/automated-data-pipelines/$RELEASENAME/install-application-stack.sh\" | bash -s $RELEASENAME | tee \"/var/log/intelius-adp-application-code-install.log\" &", 
+                "wait",
+
+                "echo \"Printing microK8s config:\"",
+                "microk8s config",
+
+                "echo \"=======> DAIR BOOSTERPACK INSTALLATION IS COMPLETE <=======\"",
+                "echo $(date)",
+                
+                "} >> /var/log/boosterpack.log 2>&1" 
+                
+              ]
+            ]
+          }
+        }
+      }
+    }
+  }, 
+  "Outputs" : {
+    "InstanceID" : {
+        "Value" : { "Ref" : "AppServer" },
+        "Description" : "Application Server Instance ID"
+      },
+    "IPAddress" : {
+      "Value" : { "Fn::GetAtt" : [ "AppServer", "PublicIp" ]},
+      "Description" : "Application Server IP Address"
+    }
+  }
+}
