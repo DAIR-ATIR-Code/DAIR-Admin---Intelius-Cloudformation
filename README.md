@@ -1,3 +1,3 @@
 # InteliusAI
 
-DAIR Repo for Intelius AI Boosterpack
+DAIR Repo for Intelius AI BoosterPack
