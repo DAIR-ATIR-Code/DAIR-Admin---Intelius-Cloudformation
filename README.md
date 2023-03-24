@@ -1,3 +1,3 @@
 # Intelius
 
-DAIR Repo for Intelius AI BoosterPack
+AWS Cloudformation Repo for Intelius AI BoosterPack
